@@ -1,12 +1,9 @@
-" Fold routines for python code
+" Fold routines for python code, version 1.3
+" Last Change:	2009 Feb 1
 " I have been using the standard python-fold.vim for years,
 " and got more and more frustrated with it
-" Author:	Jurjen Bos (foldexpr), Max Ischenko (foldtext), Robert
-" Ames (line counts)
+" Author:	Jurjen Bos (foldexpr, and most of foldtext), Max Ischenko (foldtext)
 " Bug fix:	Drexler Christopher, Tom Schumm, Geoff Gerrietts
-
-" Version: 2.4
-" Last Change:	2009 Jan 27
 
 " Principles:
 " - a def/class starts a fold
@@ -39,16 +36,11 @@ function! PythonFoldText()
     let line = line . ' pass'
   endif
   let size = 1 + v:foldend - v:foldstart
-  if size < 10
-    let size = " " . size
-  endif
-  if size < 100
-    let size = " " . size
-  endif
-  if size < 1000
-    let size = " " . size
-  endif
-  return size . " lines: " . line
+  let spcs = '................'
+  while strlen(spcs) < winwidth(0)
+    let spcs = spcs . spcs
+  endwhile
+  return strpart(line.spcs, 0, winwidth(0)-strlen(size)-7).'.'.size.' lines'
 endfunction
 
 
