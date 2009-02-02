@@ -1,5 +1,5 @@
-" Fold routines for python code, version 1.3
-" Last Change:	2009 Feb 1
+" Fold routines for python code, version 1.4
+" Last Change:	2009 Feb 2
 " I have been using the standard python-fold.vim for years,
 " and got more and more frustrated with it
 " Author:	Jurjen Bos (foldexpr, and most of foldtext), Max Ischenko (foldtext)
@@ -26,6 +26,7 @@ function! PythonFoldText()
   let line = getline(v:foldstart)
   let nnum = nextnonblank(v:foldstart + 1)
   let nextline = getline(nnum)
+  "get the document string
   if nextline =~ '^\s\+"""$'
     let line = line . getline(nnum + 1)
   elseif nextline =~ '^\s\+"""'
@@ -35,12 +36,18 @@ function! PythonFoldText()
   elseif nextline =~ '^\s\+pass\s*$'
     let line = line . ' pass'
   endif
+  "compute the width of the visible part of the window
+  let w = winwidth(0) - &foldcolumn - (&number ? 8 : 0)
   let size = 1 + v:foldend - v:foldstart
+  "compute expansion string
   let spcs = '................'
-  while strlen(spcs) < winwidth(0)
+  while strlen(spcs) < w
     let spcs = spcs . spcs
   endwhile
-  return strpart(line.spcs, 0, winwidth(0)-strlen(size)-7).'.'.size.' lines'
+  "expand tabs (mail me if you have tabstop>10)
+  let onetab = strpart('          ', 0, &tabstop)
+  let line = substitute(line, '	', onetab, 'g')
+  return strpart(line.spcs, 0, w-strlen(size)-7).'.'.size.' lines'
 endfunction
 
 
@@ -74,7 +81,7 @@ function! GetPythonFold(lnum)
     if ind == 0
         return '1'
     endif
-    pind = indent(a:lnum - 1)
+    let pind = indent(a:lnum - 1)
     " line is indented more or equal
     if pind <= ind
         return '='
