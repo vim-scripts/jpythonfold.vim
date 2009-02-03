@@ -1,5 +1,5 @@
-" Fold routines for python code, version 2.1
-" Last Change: 2009 Feb 2, when I had better go to bed
+" Fold routines for python code, version 2.2
+" Last Change: 2009 Feb 3
 " Author: Jurjen Bos (foldexpr, and most of foldtext), Max Ischenko (foldtext)
 " Bug fixes: Grissiom, David Froger
 
@@ -28,9 +28,11 @@ function! PythonFoldText()
   let line = getline(v:foldstart)
   let nnum = nextnonblank(v:foldstart + 1)
   let nextline = getline(nnum)
-  "get the document string. This is ugly, but I can't fix it
-  if nextline =~ "^\\s\\+[\"']\\{1,3}"
-      let line = matchstr(nextline, "^\\s\\+[\"']\\{1,3}\\zs.\\{-}\\ze['\"]\\{0,3}$")
+  "get the document string.
+  if nextline =~ "^\\s\\+[\"']\\{3}\\s*$"
+      let line = line . " " . matchstr(getline(nextnonblank(nnum + 1)), '^\s*\zs.*\ze$')
+  elseif nextline =~ "^\\s\\+[\"']\\{1,3}"
+      let line = line." ".matchstr(nextline, "^\\s\\+[\"']\\{1,3}\\zs.\\{-}\\ze['\"]\\{0,3}$")
   elseif nextline =~ '^\s\+pass\s*$'
     let line = line . ' pass'
   endif
@@ -52,13 +54,13 @@ function! GetBlockIndent(lnum)
     " Auxiliary function; determines the indent level of the def/class
     " "global" lines are level 0, first def &sw, and so on
     " scan backwards for class/def that is shallower or equal
-    let p = a:lnum
+    let p = nextnonblank(a:lnum)
     " skip comments and empty lines, since we don't trust their indent
-    while indent(p)>=0 && getline(p) =~ '^\s*#\|^$'
-        let p = p + 1
+    while p>0 && getline(p) =~ '^\s*#\|^$'
+        let p = nextnonblank(p + 1)
     endwhile
     let ind = indent(p)
-    while indent(p)>=0
+    while indent(p) >= 0
         let p = p - 1
         " skip comments and empty lines
         if getline(p) =~ '^$\|^\s*#'
@@ -69,7 +71,7 @@ function! GetBlockIndent(lnum)
         " indent is strictly less at this point: check for def/class
         elseif getline(p) =~ '^\s*\(def\|class\)\s'
             " this is the level!
-            return indent(p)+&sw
+            return indent(p) + &sw
         " zero-level regular line
         elseif indent(p) == 0
             return 0
@@ -100,13 +102,13 @@ function! GetPythonFold(lnum)
         return 1
     " regular line: deep line or non-comment line
     elseif ind>=blockindent || line !~ '^\s*#'
-        return blockindent/&sw
+        return blockindent / &sw
     endif
     " shallow comment: level is determined by next line
     " search for next non-comment nonblank line
-    let n = a:lnum + 1
-    while indent(n)>=0 && getline(n) =~ '^\s*#\|^$'
-        let n = n+1
+    let n = nextnonblank(a:lnum + 1)
+    while n>0 && getline(n) =~ '^\s*#\|^$'
+        let n = nextnonblank(n + 1)
     endwhile
-    return GetBlockIndent(n)/&sw
+    return GetBlockIndent(n) / &sw
 endfunction
