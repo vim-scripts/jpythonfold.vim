@@ -1,21 +1,31 @@
-" Fold routines for python code, version 2.3
+" Fold routines for python code, version 2.4
 " Source: http://www.vim.org/scripts/script.php?script_id=2527
-" Last Change: 2009 Feb 4
+" Last Change: 2009 Feb 6
 " Author: Jurjen Bos
-" Bug fixes and comments: Grissiom, David Froger, Andrew McNabb
+" Bug fixes and helpful comments: Grissiom, David Froger, Andrew McNabb
 
 " Principles:
 " - a def/class starts a fold
 " a line with indent less than the previous def/class ends a fold
 " empty lines are linked to the previous fold
-" optionally, you can get empty lines between folds (see ***)
+" - optionally, you can get empty lines between folds, see (***)
+" - another option is to ignore non-python files see (**)
+" - you can also modify the def/class check, allowing for multiline def and class definitions
 " comment lines outside a def/class are never folded
 " other lines outside a def/class are folded together as a group
 " Note:
 " Vim 6 line numbers always take 8 columns, while vim 7 has a numberwidth variable
-" you can change the 8 if you have vim 7, and use more than 8 columns
+" you can change the 8 below to &numberwidth if you have vim 7,
+" this is only really useful when you plan to use more than 8 columns (i.e. never)
+" Note 2:
+" class definitions are supposed to ontain a colon on the same line.
+" function definitions are *not* required to have a colon, to allow for multiline defs.
+" I you disagree, use instead of the pattern '^\s*\(class\s.*:\|def\s\)'
+" to enforce : for defs:                     '^\s*\(class\|def\)\s.*:'
+" to allow multiline class definitions:      '^\s*\(class\|def\)\s'
+" you'll have to do this in two places.
 
-" Ignore non-python files
+" (**) Ignore non-python files
 " Commented out because some python files are not recognized by Vim
 "if &filetype != 'python'
 "    finish
@@ -52,13 +62,13 @@ function! PythonFoldText()
 endfunction
 
 function! GetBlockIndent(lnum)
-    " Auxiliary function; determines the indent level of the def/class
-    " "global" lines are level 0, first def &sw, and so on
+    " Auxiliary function; determines the indent level of the surrounding def/class
+    " "global" lines are level 0, first def &shiftwidth, and so on
     " scan backwards for class/def that is shallower or equal
-    let p = nextnonblank(a:lnum)
+    let p = prevnonblank(a:lnum)
     " skip comments and empty lines, to get proper initial indent
     while p>0 && getline(p) =~ '^\s*#\|^$'
-        let p = nextnonblank(p + 1)
+        let p = prevnonblank(p - 1)
     endwhile
     let ind = indent(p)
     while indent(p) >= 0
@@ -67,9 +77,9 @@ function! GetBlockIndent(lnum)
         if indent(p) >= ind || getline(p) =~ '^$\|^\s*#'
             continue
         " indent is strictly less at this point: check for def/class
-        elseif getline(p) =~ '^\s*\(def\|class\)\s.*:'
+        elseif getline(p) =~ '^\s*\(class\s.*:\|def\s\)'
             " this is the level!
-            return indent(p) + &sw
+            return indent(p) + &shiftwidth
         " zero-level regular line
         elseif indent(p) == 0
             return 0
@@ -86,25 +96,35 @@ function! GetPythonFold(lnum)
     let line = getline(a:lnum)
     let ind = indent(a:lnum)
     " class and def start a fold
-    if line =~ '^\s*\(def\|class\)\s.*:'
-        return ">" . (ind / &sw + 1)
-    " *** uncomment next two lines if you want empty lines/comment out of a fold
+    if line =~ '^\s*\(class\s.*:\|def\s\)'
+        return ">" . (ind / &shiftwidth + 1)
+    " (***) uncomment the next two lines if you want empty lines/comment out of a fold
     "elseif line=~'^$\|^\s*#'
     "    return -1
-    " optimization for speed: same level if:
-    " line is no comment, and previous line is not special, and indent doesn't increase
-    " (note that empty lines are are handled by this case too)
-    elseif line!~'^\s*#' && getline(a:lnum-1)!~'^$\|^\s*\(#\|def\s\|class\s\)' && indent(a:lnum-1)>=ind
+    " some speed optimizations for common cases: same level if:
+    " - indent positive and non-decreasing without def/class
+    " (don't change the def/class pattern even if you change the others!)
+    elseif ind>0 && ind>=indent(a:lnum-1) && getline(a:lnum-1)!~'^$\|^\s*\(def\|class\)\s'
         return '='
+    " - empty lines before non-global lines
+    elseif line == '' && getline(a:lnum+1) !~ '^[^ \t#]'
+        return '='
+    " - global code
+    elseif line =~ '^[^ \t#]'
+        return 1
     endif
+
     " figure out the surrounding class/def block
     let blockindent = GetBlockIndent(a:lnum)
+    " global code follows: end all blocks
+    if blockindent>0 && getline(a:lnum+1) =~ '^[^ \t#]'
+        return '<1'
     " global code, with indented comments, form a block
-    if blockindent==0 && line !~ '^#'
+    elseif blockindent==0 && line !~ '^#'
         return 1
     " regular line: deep line or non-comment line
     elseif ind>=blockindent || line !~ '^\s*#'
-        return blockindent / &sw
+        return blockindent / &shiftwidth
     endif
     " shallow comment: level is determined by next line
     " search for next non-comment nonblank line
@@ -112,5 +132,5 @@ function! GetPythonFold(lnum)
     while n>0 && getline(n) =~ '^\s*#\|^$'
         let n = nextnonblank(n + 1)
     endwhile
-    return GetBlockIndent(n) / &sw
+    return GetBlockIndent(n) / &shiftwidth
 endfunction
