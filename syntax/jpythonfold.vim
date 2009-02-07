@@ -1,4 +1,4 @@
-" Fold routines for python code, version 2.4
+" Fold routines for python code, version 2.5
 " Source: http://www.vim.org/scripts/script.php?script_id=2527
 " Last Change: 2009 Feb 6
 " Author: Jurjen Bos
@@ -65,12 +65,8 @@ function! GetBlockIndent(lnum)
     " Auxiliary function; determines the indent level of the surrounding def/class
     " "global" lines are level 0, first def &shiftwidth, and so on
     " scan backwards for class/def that is shallower or equal
-    let p = prevnonblank(a:lnum)
-    " skip comments and empty lines, to get proper initial indent
-    while p>0 && getline(p) =~ '^\s*#\|^$'
-        let p = prevnonblank(p - 1)
-    endwhile
-    let ind = indent(p)
+    let ind = 100
+    let p = a:lnum
     while indent(p) >= 0
         let p = p - 1
         " skip deeper lines, comments and empty lines
@@ -78,7 +74,7 @@ function! GetBlockIndent(lnum)
             continue
         " indent is strictly less at this point: check for def/class
         elseif getline(p) =~ '^\s*\(class\s.*:\|def\s\)'
-            " this is the level!
+            " level is one more than this def/class
             return indent(p) + &shiftwidth
         " zero-level regular line
         elseif indent(p) == 0
@@ -103,7 +99,7 @@ function! GetPythonFold(lnum)
     "    return -1
     " some speed optimizations for common cases: same level if:
     " - indent positive and non-decreasing without def/class
-    " (don't change the def/class pattern even if you change the others!)
+    " (don't change this def/class pattern even if you change the others!)
     elseif ind>0 && ind>=indent(a:lnum-1) && getline(a:lnum-1)!~'^$\|^\s*\(def\|class\)\s'
         return '='
     " - empty lines before non-global lines
