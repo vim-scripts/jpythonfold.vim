@@ -1,29 +1,42 @@
-" Fold routines for python code, version 2.5
+" Fold routines for python code, version 3.0.1
 " Source: http://www.vim.org/scripts/script.php?script_id=2527
-" Last Change: 2009 Feb 6
+" Last Change: 2009 Feb 9
 " Author: Jurjen Bos
 " Bug fixes and helpful comments: Grissiom, David Froger, Andrew McNabb
 
 " Principles:
 " - a def/class starts a fold
 " a line with indent less than the previous def/class ends a fold
-" empty lines are linked to the previous fold
-" - optionally, you can get empty lines between folds, see (***)
-" - another option is to ignore non-python files see (**)
-" - you can also modify the def/class check, allowing for multiline def and class definitions
+" empty lines and comment lines are linked to the previous fold
 " comment lines outside a def/class are never folded
 " other lines outside a def/class are folded together as a group
-" Note:
+" for algorithm, see bottom of script
+
+" - optionally, you can get empty lines between folds, see (***)
+" - another option is to ignore non-python files see (**)
+" - you can also modify the def/class check,
+"    allowing for multiline def and class definitions see (*)
+
+" Note for vim 7 users:
 " Vim 6 line numbers always take 8 columns, while vim 7 has a numberwidth variable
 " you can change the 8 below to &numberwidth if you have vim 7,
 " this is only really useful when you plan to use more than 8 columns (i.e. never)
-" Note 2:
+
+" Note for masochists trying to read this:
+" I wanted to keep the functions short, so I replaced occurences of
+" if condition
+"     statement
+" by
+" if condition | statement
+" wherever I found that useful
+
+" (*)
 " class definitions are supposed to ontain a colon on the same line.
 " function definitions are *not* required to have a colon, to allow for multiline defs.
 " I you disagree, use instead of the pattern '^\s*\(class\s.*:\|def\s\)'
 " to enforce : for defs:                     '^\s*\(class\|def\)\s.*:'
-" to allow multiline class definitions:      '^\s*\(class\|def\)\s'
 " you'll have to do this in two places.
+let s:defpat = '^\s*\(class\s.*:\|def\s\)'
 
 " (**) Ignore non-python files
 " Commented out because some python files are not recognized by Vim
@@ -39,9 +52,10 @@ function! PythonFoldText()
   let line = getline(v:foldstart)
   let nnum = nextnonblank(v:foldstart + 1)
   let nextline = getline(nnum)
-  "get the document string.
+  "get the document string: next line is ''' or """
   if nextline =~ "^\\s\\+[\"']\\{3}\\s*$"
       let line = line . " " . matchstr(getline(nextnonblank(nnum + 1)), '^\s*\zs.*\ze$')
+  "next line starts with qoutes, and has text
   elseif nextline =~ "^\\s\\+[\"']\\{1,3}"
       let line = line." ".matchstr(nextline, "^\\s\\+[\"']\\{1,3}\\zs.\\{-}\\ze['\"]\\{0,3}$")
   elseif nextline =~ '^\s\+pass\s*$'
@@ -52,8 +66,7 @@ function! PythonFoldText()
   let size = 1 + v:foldend - v:foldstart
   "compute expansion string
   let spcs = '................'
-  while strlen(spcs) < w
-    let spcs = spcs . spcs
+  while strlen(spcs) < w | let spcs = spcs . spcs
   endwhile
   "expand tabs (mail me if you have tabstop>10)
   let onetab = strpart('          ', 0, &tabstop)
@@ -69,16 +82,16 @@ function! GetBlockIndent(lnum)
     let p = a:lnum
     while indent(p) >= 0
         let p = p - 1
-        " skip deeper lines, comments and empty lines
-        if indent(p) >= ind || getline(p) =~ '^$\|^\s*#'
-            continue
+        " skip empty and comment lines
+        if getline(p) =~ '^$\|^\s*#' | continue
+        " zero-level regular line
+        elseif indent(p) == 0 | return 0
+        " skip deeper or equal lines
+        elseif indent(p) >= ind || getline(p) =~ '^$\|^\s*#' | continue
         " indent is strictly less at this point: check for def/class
-        elseif getline(p) =~ '^\s*\(class\s.*:\|def\s\)'
+        elseif getline(p) =~ s:defpat
             " level is one more than this def/class
             return indent(p) + &shiftwidth
-        " zero-level regular line
-        elseif indent(p) == 0
-            return 0
         endif
         " shallower line that is neither class nor def: continue search at new level
         let ind = indent(p)
@@ -87,46 +100,116 @@ function! GetBlockIndent(lnum)
     return 0
 endfunction
 
+" Clever debug code, use as: call PrintIfCount(n,"Line: ".a:lnum.", value: ".x)
+let s:counter=0
+function! PrintIfCount(n,t)
+    "Print text the nth time this function is called
+    let s:counter = s:counter+1
+    if s:counter==a:n | echo a:t
+    endif
+endfunction
+
 function! GetPythonFold(lnum)
-    " Determine folding level in Python source
+    " Determine folding level in Python source (see "higher foldlevel theory" below)
     let line = getline(a:lnum)
     let ind = indent(a:lnum)
-    " class and def start a fold
-    if line =~ '^\s*\(class\s.*:\|def\s\)'
-        return ">" . (ind / &shiftwidth + 1)
-    " (***) uncomment the next two lines if you want empty lines/comment out of a fold
-    "elseif line=~'^$\|^\s*#'
-    "    return -1
-    " some speed optimizations for common cases: same level if:
-    " - indent positive and non-decreasing without def/class
-    " (don't change this def/class pattern even if you change the others!)
-    elseif ind>0 && ind>=indent(a:lnum-1) && getline(a:lnum-1)!~'^$\|^\s*\(def\|class\)\s'
-        return '='
-    " - empty lines before non-global lines
-    elseif line == '' && getline(a:lnum+1) !~ '^[^ \t#]'
-        return '='
-    " - global code
-    elseif line =~ '^[^ \t#]'
-        return 1
+    " Case D***: class and def start a fold
+    if line =~ s:defpat | return ">" . (ind / &shiftwidth + 1)
+    " Case E***: empty lines fold with previous
+    " (***) change '=' to -1 if you want empty lines/comment out of a fold
+    elseif line == '' | return '='
     endif
-
-    " figure out the surrounding class/def block
-    let blockindent = GetBlockIndent(a:lnum)
-    " global code follows: end all blocks
-    if blockindent>0 && getline(a:lnum+1) =~ '^[^ \t#]'
-        return '<1'
-    " global code, with indented comments, form a block
-    elseif blockindent==0 && line !~ '^#'
-        return 1
-    " regular line: deep line or non-comment line
-    elseif ind>=blockindent || line !~ '^\s*#'
-        return blockindent / &shiftwidth
-    endif
-    " shallow comment: level is determined by next line
-    " search for next non-comment nonblank line
-    let n = nextnonblank(a:lnum + 1)
-    while n>0 && getline(n) =~ '^\s*#\|^$'
-        let n = nextnonblank(n + 1)
+    " now we need the indent from previous
+    let p = prevnonblank(a:lnum-1)
+    while p>0 && getline(p) =~ '^\s*#' | let p = prevnonblank(p-1)
     endwhile
-    return GetBlockIndent(n) / &shiftwidth
+    let pind = indent(p)
+    " If previous was definition: count as one level deeper
+    if getline(p) =~ s:defpat
+        let pind = pind + &shiftwidth
+    " if begin of file: take zero
+    elseif p==0 | let pind = 0
+    endif
+    " Case S*=* and C*=*: indent equal
+    if ind>0 && ind==pind | return '='
+    " Case S*>* and C*>*: indent increase
+    elseif ind>pind | return '='
+    " All cases with 0 indent
+    elseif ind==0
+        " Case C*=0*: separate blocks
+        if pind==0 && line =~ '^\s*#' | return 0
+        " Case S*<0* and S*=0*
+        elseif line !~'^\s*#'
+            " Case S*<0*: New global comment: start fold
+            if 0<pind | return '>1'
+            " Case S*=0*, after level 0 comment
+            elseif 0==pind && getline(prevnonblank(a:lnum-1)) =~ '^\s*#'
+                return '>1'
+            " Case S*=0*, other, stay 1
+            else | return '='
+            endif
+        endif
+        " Case C*<0= and C*<0<: compute next indent
+        let n = nextnonblank(a:lnum+1)
+        while n>0 && getline(n) =~'^\s*#' | let n = nextnonblank(n+1)
+        endwhile
+        " Case C*<0=: split definitions
+        if indent(n)==0 | return 0
+        " Case C*<0<: shallow comment
+        else | return -1
+        end
+    endif
+    " now we really need to compute the actual fold indent
+    " do the hard computation
+    let blockindent = GetBlockIndent(a:lnum)
+    " Case SG<* and CG<*: global code, level 1
+    if blockindent==0 | return 1
+    endif
+    " now we need the indent from next
+    let n = nextnonblank(a:lnum+1)
+    while n>0 && getline(n) =~'^\s*#' | let n = nextnonblank(n+1)
+    endwhile
+    let nind = indent(n)
+    " Case CR<= and CR<>
+    call PrintIfCount(60, 'Line: '.a:lnum.', indent: '.ind.', n: '.n.', nind: '.nind)
+    if line =~ '^\s*#' && ind>=nind | return -1
+    " Case CR<<: return next indent
+    elseif line =~ '^\s*#' | return nind / &shiftwidth
+    " Case SR<*: return actual indent
+    else | return blockindent / &shiftwidth
+    endif
 endfunction
+
+" higher foldlevel theory
+" There are four kinds of statements: S (code), D (def/class), E (empty), C (comment)
+
+" There are two kinds of folds: R (regular), G (global statements)
+
+" There are five indent situations with respect to the previous non-emtpy non-comment line:
+" > (indent), < (dedent), = (same); < and = combine with 0 (indent is zero)
+" Note: if the previous line is class/def, its indent is interpreted as one higher
+
+" There are three indent situations with respect to the next (non-E non-C) line:
+" > (dedent), < (indent), = (same)
+
+" Situations (in order of frequency):
+" stat  fold prev   next
+" SDEC  RG   ><=00  ><=
+" D     *    *      *     begin fold level: '>'.ind/&sw+1
+" E     *    *      *     keep with previous: '='
+" S     *    =      *     stays the same: '='
+" C     *    =      *     combine with previous: '='
+" S     *    >      *     stays the same: '='
+" C     *    >      *     combine with previous: '='
+" C     *    =0     *     separate blocks: 0
+" S     *    <0     *     wordt nieuwe 1: >1
+" S     *    =0     *     stays 1: '=' (after level 0 comment: '>1')
+" C     *    <0     =     split definitions: 0
+" C     *    <0     <     shallow comment: -1
+" C     *    <0     >     [never occurs]
+" S     G    <      *     global, not the first: 1
+" C     G    <      *     indent isn't 0: 1
+" C     R    <      =     foldlevel as computed for next line: -1
+" C     R    <      >     foldlevel as computed for next line: -1
+" S     R    <      *     compute foldlevel the hard way: use function
+" C     R    <      <     foldlevel as computed for this line: use function
