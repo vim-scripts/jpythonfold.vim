@@ -1,4 +1,4 @@
-" Fold routines for python code, version 3.0.1
+" Fold routines for python code, version 3.0.2
 " Source: http://www.vim.org/scripts/script.php?script_id=2527
 " Last Change: 2009 Feb 9
 " Author: Jurjen Bos
@@ -171,7 +171,6 @@ function! GetPythonFold(lnum)
     endwhile
     let nind = indent(n)
     " Case CR<= and CR<>
-    call PrintIfCount(60, 'Line: '.a:lnum.', indent: '.ind.', n: '.n.', nind: '.nind)
     if line =~ '^\s*#' && ind>=nind | return -1
     " Case CR<<: return next indent
     elseif line =~ '^\s*#' | return nind / &shiftwidth
