@@ -1,4 +1,4 @@
-" Fold routines for python code, version 3.0.2
+" Fold routines for python code, version 3.0.3
 " Source: http://www.vim.org/scripts/script.php?script_id=2527
 " Last Change: 2009 Feb 9
 " Author: Jurjen Bos
@@ -141,7 +141,7 @@ function! GetPythonFold(lnum)
         " Case S*<0* and S*=0*
         elseif line !~'^\s*#'
             " Case S*<0*: New global comment: start fold
-            if 0<pind | return '>1'
+            if 0<pind && line!~'^else\s*:\|^except\|^elif\|^finally\s*:' | return '>1'
             " Case S*=0*, after level 0 comment
             elseif 0==pind && getline(prevnonblank(a:lnum-1)) =~ '^\s*#'
                 return '>1'
@@ -191,7 +191,7 @@ endfunction
 " There are three indent situations with respect to the next (non-E non-C) line:
 " > (dedent), < (indent), = (same)
 
-" Situations (in order of frequency):
+" Situations (in order of the script):
 " stat  fold prev   next
 " SDEC  RG   ><=00  ><=
 " D     *    *      *     begin fold level: '>'.ind/&sw+1
@@ -201,7 +201,7 @@ endfunction
 " S     *    >      *     stays the same: '='
 " C     *    >      *     combine with previous: '='
 " C     *    =0     *     separate blocks: 0
-" S     *    <0     *     wordt nieuwe 1: >1
+" S     *    <0     *     becomes new level 1: >1 (except except/else: 1)
 " S     *    =0     *     stays 1: '=' (after level 0 comment: '>1')
 " C     *    <0     =     split definitions: 0
 " C     *    <0     <     shallow comment: -1
