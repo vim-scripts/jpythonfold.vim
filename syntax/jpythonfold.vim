@@ -1,6 +1,6 @@
-" Fold routines for python code, version 3.0.3
+" Fold routines for python code, version 3.1
 " Source: http://www.vim.org/scripts/script.php?script_id=2527
-" Last Change: 2009 Feb 9
+" Last Change: 2009 Feb 17
 " Author: Jurjen Bos
 " Bug fixes and helpful comments: Grissiom, David Froger, Andrew McNabb
 
@@ -36,7 +36,7 @@
 " I you disagree, use instead of the pattern '^\s*\(class\s.*:\|def\s\)'
 " to enforce : for defs:                     '^\s*\(class\|def\)\s.*:'
 " you'll have to do this in two places.
-let s:defpat = '^\s*\(class\s.*:\|def\s\)'
+let s:defpat = '^\s*\(if False:\|@\|class\s.*:\|def\s\)'
 
 " (**) Ignore non-python files
 " Commented out because some python files are not recognized by Vim
@@ -49,8 +49,11 @@ setlocal foldexpr=GetPythonFold(v:lnum)
 setlocal foldtext=PythonFoldText()
 
 function! PythonFoldText()
-  let line = getline(v:foldstart)
-  let nnum = nextnonblank(v:foldstart + 1)
+  let fs = v:foldstart
+  while getline(fs) =~ '^\s*@' | let fs = nextnonblank(fs + 1)
+  endwhile
+  let line = getline(fs)
+  let nnum = nextnonblank(fs + 1)
   let nextline = getline(nnum)
   "get the document string: next line is ''' or """
   if nextline =~ "^\\s\\+[\"']\\{3}\\s*$"
@@ -114,7 +117,7 @@ function! GetPythonFold(lnum)
     let line = getline(a:lnum)
     let ind = indent(a:lnum)
     " Case D***: class and def start a fold
-    if line =~ s:defpat | return ">" . (ind / &shiftwidth + 1)
+    if line=~s:defpat && getline(prevnonblank(a:lnum-1))!~'^\s*@' | return ">".(ind/&shiftwidth+1)
     " Case E***: empty lines fold with previous
     " (***) change '=' to -1 if you want empty lines/comment out of a fold
     elseif line == '' | return '='
@@ -125,7 +128,7 @@ function! GetPythonFold(lnum)
     endwhile
     let pind = indent(p)
     " If previous was definition: count as one level deeper
-    if getline(p) =~ s:defpat
+    if getline(p) =~ s:defpat && getline(prevnonblank(a:lnum - 1)) !~ '^\s*@'
         let pind = pind + &shiftwidth
     " if begin of file: take zero
     elseif p==0 | let pind = 0
@@ -136,15 +139,14 @@ function! GetPythonFold(lnum)
     elseif ind>pind | return '='
     " All cases with 0 indent
     elseif ind==0
-        " Case C*=0*: separate blocks
-        if pind==0 && line =~ '^\s*#' | return 0
-        " Case S*<0* and S*=0*
-        elseif line !~'^\s*#'
-            " Case S*<0*: New global comment: start fold
-            if 0<pind && line!~'^else\s*:\|^except\|^elif\|^finally\s*:' | return '>1'
+        " Case C*=0*: separate global code blocks
+        if pind==0 && line =~ '^#' | return 0
+        " Case S*<0* and S*=0*: global code
+        elseif line !~'^#'
+            " Case S*<0*: new global statement if/while/for/try/with
+            if 0<pind && line!~'^else\s*:\|^except.*:\|^elif.*:\|^finally\s*:' | return '>1'
             " Case S*=0*, after level 0 comment
-            elseif 0==pind && getline(prevnonblank(a:lnum-1)) =~ '^\s*#'
-                return '>1'
+            elseif 0==pind && getline(prevnonblank(a:lnum-1)) =~ '^\s*#' | return '>1'
             " Case S*=0*, other, stay 1
             else | return '='
             endif
@@ -180,7 +182,11 @@ function! GetPythonFold(lnum)
 endfunction
 
 " higher foldlevel theory
-" There are four kinds of statements: S (code), D (def/class), E (empty), C (comment)
+" There are five kinds of statements: S (code), D (def/class), E (empty), C (comment)
+
+" Note that a decorator statement (beginning with @) counts as definition,
+" but that of a sequence of @,@,@,def only the first one counts
+" This means that a definiion only counts if not preceded by a decorator
 
 " There are two kinds of folds: R (regular), G (global statements)
 
@@ -194,7 +200,7 @@ endfunction
 " Situations (in order of the script):
 " stat  fold prev   next
 " SDEC  RG   ><=00  ><=
-" D     *    *      *     begin fold level: '>'.ind/&sw+1
+" D     *    *      *     begin fold level if previous is not @: '>'.ind/&sw+1
 " E     *    *      *     keep with previous: '='
 " S     *    =      *     stays the same: '='
 " C     *    =      *     combine with previous: '='
