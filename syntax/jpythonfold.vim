@@ -1,6 +1,6 @@
-" Fold routines for python code, version 3.1
+" Fold routines for python code, version 3.2
 " Source: http://www.vim.org/scripts/script.php?script_id=2527
-" Last Change: 2009 Feb 17
+" Last Change: 2009 Feb 25
 " Author: Jurjen Bos
 " Bug fixes and helpful comments: Grissiom, David Froger, Andrew McNabb
 
@@ -36,7 +36,7 @@
 " I you disagree, use instead of the pattern '^\s*\(class\s.*:\|def\s\)'
 " to enforce : for defs:                     '^\s*\(class\|def\)\s.*:'
 " you'll have to do this in two places.
-let s:defpat = '^\s*\(if False:\|@\|class\s.*:\|def\s\)'
+let s:defpat = '^\s*\(@\|class\s.*:\|def\s\)'
 
 " (**) Ignore non-python files
 " Commented out because some python files are not recognized by Vim
@@ -82,7 +82,7 @@ function! GetBlockIndent(lnum)
     " "global" lines are level 0, first def &shiftwidth, and so on
     " scan backwards for class/def that is shallower or equal
     let ind = 100
-    let p = a:lnum
+    let p = a:lnum+1
     while indent(p) >= 0
         let p = p - 1
         " skip empty and comment lines
@@ -92,7 +92,7 @@ function! GetBlockIndent(lnum)
         " skip deeper or equal lines
         elseif indent(p) >= ind || getline(p) =~ '^$\|^\s*#' | continue
         " indent is strictly less at this point: check for def/class
-        elseif getline(p) =~ s:defpat
+        elseif getline(p) =~ s:defpat && getline(p) !~ '^\s*@'
             " level is one more than this def/class
             return indent(p) + &shiftwidth
         endif
@@ -117,7 +117,16 @@ function! GetPythonFold(lnum)
     let line = getline(a:lnum)
     let ind = indent(a:lnum)
     " Case D***: class and def start a fold
-    if line=~s:defpat && getline(prevnonblank(a:lnum-1))!~'^\s*@' | return ">".(ind/&shiftwidth+1)
+    " If previous line is @, it is not the first
+    if line =~ s:defpat && getline(prevnonblank(a:lnum-1)) !~ '^\s*@'
+        " let's see if this range of 0 or more @'s end in a class/def
+        let n = a:lnum
+        while getline(n) =~ '^\s*@' | let n = nextnonblank(n + 1)
+        endwhile
+        " yes, we have a match: this is the first of a real def/class with decorators
+        if getline(n) =~ s:defpat
+            return ">".(ind/&shiftwidth+1)
+        endif
     " Case E***: empty lines fold with previous
     " (***) change '=' to -1 if you want empty lines/comment out of a fold
     elseif line == '' | return '='
@@ -173,6 +182,8 @@ function! GetPythonFold(lnum)
     endwhile
     let nind = indent(n)
     " Case CR<= and CR<>
+    "if line !~ '^\s*#' | call PrintIfCount(4,"Line: ".a:lnum.", blockindent: ".blockindent.", n: ".n.", nind: ".nind.", p: ".p.", pind: ".pind)
+    endif
     if line =~ '^\s*#' && ind>=nind | return -1
     " Case CR<<: return next indent
     elseif line =~ '^\s*#' | return nind / &shiftwidth
