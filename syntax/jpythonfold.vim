@@ -74,7 +74,8 @@ function! PythonFoldText()
   "expand tabs (mail me if you have tabstop>10)
   let onetab = strpart('          ', 0, &tabstop)
   let line = substitute(line, '\t', onetab, 'g')
-  return strpart(line.spcs, 0, w-strlen(size)-7).'.'.size.' lines'
+  let fix = strlen(line) - strlen(substitute(line, ".", "x", "g"))  " fix for non-ascii symbols
+  return strpart(line.spcs, 0, w-strlen(size)-7+fix).'.'.size.' lines'
 endfunction
 
 function! GetBlockIndent(lnum)
